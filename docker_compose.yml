@@ -1,0 +1,73 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: ncuser
+      POSTGRES_PASSWORD: <set password>
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  nextcloud:
+    image: nextcloud:latest
+    restart: unless-stopped
+    depends_on: [postgres]
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: ncuser
+      POSTGRES_PASSWORD: NcPass123!
+      NEXTCLOUD_ADMIN_USER: admin
+      NEXTCLOUD_ADMIN_PASSWORD: <set password>
+    volumes:
+      - nextcloud-data:/var/www/html.
+    extra_hosts:
+      - "keycloak.local:host-gateway" 
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ':9001'
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: <set password>
+    volumes:
+      - minio-data:/data
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    restart: unless-stopped
+    command: start-dev
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: <set password>
+    ports:
+      - '8080:8080'
+
+  vault:
+    image: hashicorp/vault:latest
+    restart: unless-stopped
+    cap_add: [IPC_LOCK]
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: <set token>
+      VAULT_DEV_LISTEN_ADDRESS: '0.0.0.0:8200'
+    ports:
+      - '8200:8200'
+
+  nginx:
+    image: nginx:latest
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./nginx/conf:/etc/nginx/conf.d
+      - ./nginx/certs:/etc/nginx/certs
+      - ./nginx/logs:/var/log/nginx
+    depends_on: [nextcloud, keycloak, minio, vault]
+
+volumes:
+  postgres-data:
+  nextcloud-data:
+  minio-data:
